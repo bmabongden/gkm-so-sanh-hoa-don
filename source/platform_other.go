@@ -18,4 +18,8 @@ func openWindow(url string) {
 	}
 }
 
-func restart(exe string) { _ = exec.Command(exe).Start() }
+func restart(exe string, args ...string) error {
+	c := exec.Command(exe, args...)
+	c.Stdout, c.Stderr = os.Stdout, os.Stderr
+	return c.Start()
+}
