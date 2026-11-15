@@ -1,0 +1,5 @@
+*.new
+*.old
+# hóa đơn thật của nhà cung cấp: không đưa lên kho công khai
+samples/*
+!samples/README.txt

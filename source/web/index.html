@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GKM - So Sánh Hóa Đơn</title>
+<link rel="icon" href="logo.png">
+<style>
+:root{
+  --bg:#f1f5f9; --card:#ffffff; --ink:#0f172a; --muted:#64748b; --line:#e2e8f0;
+  --brand:#2563eb; --brand2:#06b6d4; --ok:#16a34a; --okbg:#dcfce7; --bad:#dc2626; --badbg:#fee2e2;
+  --warn:#d97706; --warnbg:#fef3c7; --info:#7c3aed; --infobg:#ede9fe; --soft:#f8fafc;
+  --r:18px; --shadow:0 6px 24px rgba(15,23,42,.07);
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:"Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif;font-size:14px}
+button{font-family:inherit;cursor:pointer}
+.wrap{max-width:1180px;margin:0 auto;padding:18px 20px 0}
+/* top bar */
+.top{display:flex;align-items:center;gap:12px;background:var(--card);border-radius:var(--r);padding:12px 16px;box-shadow:var(--shadow)}
+.logo{width:42px;height:42px;border-radius:12px;display:block}
+.top h1{font-size:17px;margin:0;line-height:1.2}
+.top small{color:var(--muted)}
+.sp{flex:1}
+.ver{font-size:12px;color:var(--muted);background:var(--soft);border:1px solid var(--line);padding:4px 10px;border-radius:999px}
+.btn{border:0;border-radius:999px;padding:10px 18px;font-weight:600;font-size:14px;display:inline-flex;align-items:center;gap:8px;transition:.15s}
+.btn svg{width:17px;height:17px}
+.btn-ghost{background:var(--soft);color:var(--ink);border:1px solid var(--line)}
+.btn-ghost:hover{background:#eef2ff;border-color:#c7d2fe}
+.btn-main{background:linear-gradient(135deg,var(--brand),var(--brand2));color:#fff;padding:13px 30px;font-size:15px;box-shadow:0 8px 20px rgba(37,99,235,.25)}
+.btn-main:disabled{background:#cbd5e1;box-shadow:none;cursor:not-allowed}
+.btn-main:not(:disabled):hover{transform:translateY(-1px)}
+.btn-dark{background:#475569;color:#fff}
+.btn-dark:hover{background:#334155}
+.btn-green{background:var(--okbg);color:#166534}
+.btn-green:hover{background:#bbf7d0}
+/* upload */
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:18px}
+.card{background:var(--card);border-radius:var(--r);box-shadow:var(--shadow);padding:18px 20px}
+.card h2{margin:0;font-size:16px;display:flex;align-items:center;gap:8px}
+.tag{font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px}
+.tag.a{background:#dbeafe;color:#1d4ed8}.tag.b{background:#cffafe;color:#0e7490}
+.card p.hint{margin:6px 0 12px;color:var(--muted);font-size:13px}
+.drop{border:2px dashed #cbd5e1;border-radius:14px;padding:22px 12px;text-align:center;color:var(--muted);transition:.15s;cursor:pointer;background:var(--soft)}
+.drop:hover,.drop.over{border-color:var(--brand);background:#eff6ff;color:var(--brand)}
+.drop svg{width:34px;height:34px;opacity:.7}
+.drop b{color:var(--brand)}
+.files{list-style:none;margin:12px 0 0;padding:0;display:flex;flex-direction:column;gap:8px}
+.file{display:flex;align-items:center;gap:10px;background:var(--soft);border:1px solid var(--line);border-radius:12px;padding:8px 10px}
+.file .ic{width:30px;height:30px;border-radius:9px;background:#dcfce7;color:#15803d;display:grid;place-items:center;font-size:11px;font-weight:800;flex:none}
+.file .nm{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.file .mt{font-size:12px;color:var(--muted)}
+.file .x{margin-left:auto;border:0;background:transparent;color:#94a3b8;font-size:18px;border-radius:8px;width:28px;height:28px;flex:none}
+.file .x:hover{background:var(--badbg);color:var(--bad)}
+.file .err{color:var(--bad)}
+.sum-line{margin-top:10px;font-size:13px;color:var(--muted)}
+.sum-line b{color:var(--ink)}
+.actions{display:flex;justify-content:center;gap:12px;margin:20px 0 6px;flex-wrap:wrap}
+/* result */
+#result{display:none;margin-top:16px}
+.banner{border-radius:var(--r);padding:16px 20px;display:flex;align-items:center;gap:14px;box-shadow:var(--shadow)}
+.banner.ok{background:linear-gradient(135deg,#dcfce7,#ecfdf5);color:#14532d}
+.banner.bad{background:linear-gradient(135deg,#fee2e2,#fff1f2);color:#7f1d1d}
+.banner .big{width:46px;height:46px;border-radius:14px;display:grid;place-items:center;font-size:24px;background:#fff;flex:none}
+.banner h3{margin:0;font-size:17px}
+.banner p{margin:2px 0 0;font-size:13px;opacity:.85}
+.tiles{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-top:14px}
+.tile{background:var(--card);border-radius:16px;padding:14px 16px;box-shadow:var(--shadow);border-top:4px solid var(--line);cursor:pointer;transition:.15s}
+.tile:hover{transform:translateY(-2px)}
+.tile.sel{outline:2px solid var(--brand);outline-offset:-2px}
+.tile .k{font-size:12px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.3px}
+.tile .v{font-size:26px;font-weight:800;margin-top:4px}
+.tile .s{font-size:12px;color:var(--muted)}
+.t-all{border-top-color:#94a3b8}.t-ok{border-top-color:var(--ok)}.t-ok .v{color:var(--ok)}
+.t-short{border-top-color:var(--bad)}.t-short .v{color:var(--bad)}
+.t-over{border-top-color:var(--warn)}.t-over .v{color:var(--warn)}
+.t-miss{border-top-color:var(--info)}.t-miss .v{color:var(--info)}
+.tablecard{margin-top:14px}
+.tbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.tbar h3{margin:0;font-size:16px}
+.search{flex:1;min-width:200px;max-width:340px;margin-left:auto;position:relative}
+.search input{width:100%;border:1px solid var(--line);background:var(--soft);border-radius:999px;padding:9px 14px 9px 36px;font-size:14px;outline:none}
+.search input:focus{border-color:var(--brand);background:#fff}
+.search svg{position:absolute;left:12px;top:50%;transform:translateY(-50%);width:16px;height:16px;color:var(--muted)}
+.tblw{overflow:auto;max-height:520px;border-radius:12px;border:1px solid var(--line)}
+table{width:100%;border-collapse:collapse}
+thead th{position:sticky;top:0;background:#f1f5f9;font-size:12px;text-transform:uppercase;color:var(--muted);text-align:left;padding:10px 12px;font-weight:700;letter-spacing:.3px;cursor:pointer;user-select:none;white-space:nowrap}
+tbody td{padding:9px 12px;border-top:1px solid var(--line)}
+tbody tr:hover{background:#f8fafc}
+td.n,th.n{text-align:center;font-variant-numeric:tabular-nums}
+td.code{font-weight:700;font-family:Consolas,monospace;font-size:13px}
+td.name{max-width:420px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+td.d{font-weight:800}
+.neg{color:var(--bad)}.pos{color:var(--warn)}.zero{color:var(--muted)}
+.pill{font-size:12px;font-weight:700;padding:3px 10px;border-radius:999px;white-space:nowrap}
+.p-ok{background:var(--okbg);color:#166534}.p-short{background:var(--badbg);color:#991b1b}
+.p-over{background:var(--warnbg);color:#92400e}.p-miss{background:var(--infobg);color:#5b21b6}
+.src{font-size:11px;color:var(--muted)}
+.empty{padding:30px;text-align:center;color:var(--muted)}
+footer{text-align:center;color:var(--muted);font-size:13px;padding:26px 10px 22px}
+footer b{color:#334155}
+/* modal */
+.mask{position:fixed;inset:0;background:rgba(15,23,42,.35);display:none;place-items:center;z-index:9}
+.mask.show{display:grid}
+.modal{background:#fff;border-radius:20px;padding:22px 24px;width:min(420px,92vw);box-shadow:0 20px 60px rgba(0,0,0,.2);text-align:center}
+.modal .big{font-size:34px}
+.modal h3{margin:6px 0}
+.modal p{color:var(--muted);margin:6px 0 16px}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#0f172a;color:#fff;padding:10px 18px;border-radius:999px;font-size:13px;display:none;z-index:10}
+@media (max-width:860px){.grid2{grid-template-columns:1fr}.tiles{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <img class="logo" src="logo.png" alt="GKM">
+    <div><h1>So Sánh Hóa Đơn Nhập Hàng</h1><small>Đối chiếu số lượng giữa hóa đơn nhà cung cấp và hàng thực nhận</small></div>
+    <div class="sp"></div>
+    <span class="ver" id="ver">v1.0.0</span>
+    <button class="btn btn-ghost" id="btnUpdate" title="Kiểm tra phiên bản mới">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></svg>
+      Cập nhật ứng dụng</button>
+  </div>
+
+  <div class="grid2">
+    <div class="card" id="cardA">
+      <h2><span class="tag a">A</span> Hóa đơn nhà cung cấp</h2>
+      <p class="hint">File Honda / Yamaha gửi (vd: Honda Thu Thuy.xlsx). Có thể chọn nhiều file.</p>
+      <div class="drop" data-side="A">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>
+        <div><b>Bấm để chọn file</b> hoặc kéo thả vào đây</div>
+        <div style="font-size:12px;margin-top:2px">Excel .xlsx, .xls, .csv</div>
+      </div>
+      <ul class="files" id="listA"></ul>
+      <div class="sum-line" id="sumA"></div>
+    </div>
+    <div class="card" id="cardB">
+      <h2><span class="tag b">B</span> Hàng thực nhận Gia Khánh</h2>
+      <p class="hint">File phiếu nhập GK (vd: GK1, GK2...). Nhiều file sẽ được cộng gộp số lượng.</p>
+      <div class="drop" data-side="B">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>
+        <div><b>Bấm để chọn file</b> hoặc kéo thả vào đây</div>
+        <div style="font-size:12px;margin-top:2px">Excel .xlsx, .xls, .csv</div>
+      </div>
+      <ul class="files" id="listB"></ul>
+      <div class="sum-line" id="sumB"></div>
+    </div>
+  </div>
+  <input type="file" id="picker" accept=".xlsx,.xls,.csv" multiple hidden>
+
+  <div class="actions">
+    <button class="btn btn-main" id="btnCompare" disabled>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/></svg>
+      So sánh số lượng</button>
+    <button class="btn btn-dark" id="btnReset">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
+      Làm mới</button>
+  </div>
+
+  <section id="result">
+    <div class="banner" id="banner"></div>
+    <div class="tiles" id="tiles"></div>
+    <div class="card tablecard">
+      <div class="tbar">
+        <h3 id="tblTitle">Chi tiết</h3>
+        <div class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <input id="q" placeholder="Tìm mã hàng hoặc tên hàng..."></div>
+        <button class="btn btn-green" id="btnExport">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 4v12"/><path d="m7 11 5 5 5-5"/><path d="M4 20h16"/></svg>
+          Xuất Excel</button>
+      </div>
+      <div class="tblw"><table>
+        <thead><tr>
+          <th data-k="i" class="n">#</th><th data-k="code">Mã hàng</th><th data-k="name">Tên hàng</th>
+          <th data-k="a" class="n">SL hóa đơn</th><th data-k="b" class="n">SL thực nhận</th>
+          <th data-k="d" class="n">Lệch</th><th data-k="st">Trạng thái</th>
+        </tr></thead>
+        <tbody id="tbody"></tbody>
+      </table></div>
+    </div>
+  </section>
+
+  <footer>Ứng dụng phát triển bởi <b>Gia Khánh Motor</b>, vui lòng không sao chép dưới mọi hình thức</footer>
+</div>
+
+<div class="mask" id="mask"><div class="modal" id="modal"></div></div>
+<div class="toast" id="toast"></div>
+
+<script src="xlsx.full.min.js"></script>
+<script>
+let APP_VERSION = '1.0.0';
+let stopPing = false;
+const $ = s => document.querySelector(s);
+const state = { A: [], B: [] };   // mỗi phần tử: {name, rows:[{code,name,qty}], cols, error}
+let lastResult = null, filter = 'diff', sortKey = null, sortDir = 1, pickSide = 'A';
+
+/* ---------- Đọc file & nhận diện cột ---------- */
+const norm = s => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/đ/gi,'d').toLowerCase().replace(/\s+/g,' ').trim();
+const COLS = {
+  code: ['ma hang','ma hh','ma sp','ma vat tu','ma phu tung','ma san pham','part number','part no','sku','item code','code','ma'],
+  name: ['ten hang','ten hh','ten sp','ten vat tu','ten phu tung','ten san pham','dien giai','description','item name','ten'],
+  qty:  ['so luong','sl','qty','quantity','sl nhap','so luong nhap','sl thuc nhan']
+};
+function matchCol(h, keys){ const n = norm(h); return keys.findIndex(k => n === k) >= 0 ? 2 : (keys.some(k => k.length>3 && n.includes(k)) ? 1 : 0); }
+function detect(rows){
+  // quét 20 dòng đầu, tìm dòng tiêu đề có nhiều cột khớp nhất
+  let best = null;
+  for (let r = 0; r < Math.min(20, rows.length); r++){
+    const row = rows[r] || []; const pick = {}; let score = 0;
+    for (const f of ['code','name','qty']){
+      let bi = -1, bs = 0;
+      row.forEach((h,i)=>{ const s = matchCol(h, COLS[f]); if (s > bs && !Object.values(pick).includes(i)){ bs = s; bi = i; } });
+      if (bi >= 0){ pick[f] = bi; score += bs; }
+    }
+    if (pick.code !== undefined && pick.qty !== undefined && (!best || score > best.score)) best = { r, pick, score, headers: row };
+  }
+  return best;
+}
+const cleanCode = c => String(c ?? '').replace(/\s+/g,'').toUpperCase();
+const toNum = v => { if (typeof v === 'number') return v; const s = String(v ?? '').replace(/\./g,'').replace(',', '.').trim(); const n = parseFloat(s); return isNaN(n) ? null : n; };
+
+async function readFile(file){
+  const buf = await file.arrayBuffer();
+  const wb = XLSX.read(buf, { type: 'array' });
+  for (const sn of wb.SheetNames){
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], { header: 1, raw: true, defval: null });
+    const d = detect(rows);
+    if (!d) continue;
+    const out = [];
+    for (let i = d.r + 1; i < rows.length; i++){
+      const row = rows[i] || []; const code = cleanCode(row[d.pick.code]);
+      if (!code || /^(tong|cong|total)/i.test(norm(code))) continue;
+      const q = toNum(row[d.pick.qty]); if (q === null) continue;
+      out.push({ code, name: d.pick.name !== undefined ? String(row[d.pick.name] ?? '').trim() : '', qty: q });
+    }
+    return { name: file.name, sheet: sn, rows: out,
+      cols: { code: d.headers[d.pick.code], name: d.headers[d.pick.name], qty: d.headers[d.pick.qty] } };
+  }
+  return { name: file.name, rows: [], error: 'Không tìm thấy cột "Mã hàng" và "Số lượng"' };
+}
+
+async function addFiles(side, fileList){
+  const files = Array.from(fileList);
+  for (const f of files){
+    if (!/\.(xlsx|xls|csv)$/i.test(f.name)) { toast('Bỏ qua ' + f.name + ': không phải file Excel'); continue; }
+    if (state[side].some(x => x.name === f.name)) { toast(f.name + ' đã có trong danh sách'); continue; }
+    try { state[side].push(await readFile(f)); } catch(e){ state[side].push({ name: f.name, rows: [], error: 'Không đọc được file' }); }
+  }
+  render();
+}
+
+/* ---------- So sánh ---------- */
+function aggregate(list){
+  const m = new Map();
+  for (const f of list) for (const r of f.rows){
+    const o = m.get(r.code) || { name: r.name, qty: 0, src: new Set() };
+    o.qty += r.qty; if (!o.name) o.name = r.name; o.src.add(f.name.replace(/\.(xlsx|xls|csv)$/i,''));
+    m.set(r.code, o);
+  }
+  return m;
+}
+function compare(){
+  const A = aggregate(state.A), B = aggregate(state.B);
+  const codes = new Set([...A.keys(), ...B.keys()]); const rows = [];
+  for (const c of codes){
+    const a = A.get(c), b = B.get(c); const qa = a?.qty || 0, qb = b?.qty || 0, d = qb - qa;
+    let st = 'ok';
+    if (!a) st = 'onlyB'; else if (!b) st = 'onlyA'; else if (d < 0) st = 'short'; else if (d > 0) st = 'over';
+    rows.push({ code: c, name: a?.name || b?.name || '', a: qa, b: qb, d, st, src: b ? [...b.src].join(', ') : '' });
+  }
+  rows.sort((x,y)=> x.code.localeCompare(y.code));
+  rows.forEach((r,i)=> r.i = i+1);
+  const cnt = k => rows.filter(r => r.st === k).length;
+  lastResult = { rows, ok: cnt('ok'), short: cnt('short'), over: cnt('over'), onlyA: cnt('onlyA'), onlyB: cnt('onlyB'),
+    sumA: rows.reduce((s,r)=>s+r.a,0), sumB: rows.reduce((s,r)=>s+r.b,0) };
+  filter = lastResult.rows.length === lastResult.ok ? 'all' : 'diff';
+  showResult();
+}
+
+const ST = { ok:['Khớp','p-ok'], short:['Thiếu','p-short'], over:['Thừa','p-over'], onlyA:['Chưa nhận','p-short'], onlyB:['Ngoài hóa đơn','p-miss'] };
+const fmt = n => Number(n).toLocaleString('vi-VN');
+
+function showResult(){
+  const R = lastResult; $('#result').style.display = 'block';
+  const nDiff = R.rows.length - R.ok;
+  $('#banner').className = 'banner ' + (nDiff ? 'bad' : 'ok');
+  $('#banner').innerHTML = nDiff
+    ? `<div class="big">⚠️</div><div><h3>Có ${nDiff} mã hàng chênh lệch số lượng</h3><p>Tổng SL hóa đơn: <b>${fmt(R.sumA)}</b> · Tổng SL thực nhận: <b>${fmt(R.sumB)}</b> · Lệch: <b>${R.sumB-R.sumA>0?'+':''}${fmt(R.sumB-R.sumA)}</b></p></div>`
+    : `<div class="big">✅</div><div><h3>Khớp hoàn toàn! ${R.rows.length} mã hàng đúng số lượng</h3><p>Tổng SL hóa đơn: <b>${fmt(R.sumA)}</b> = Tổng SL thực nhận: <b>${fmt(R.sumB)}</b></p></div>`;
+  const tiles = [
+    ['all','t-all','Tất cả mã', R.rows.length, 'Hóa đơn + thực nhận'],
+    ['ok','t-ok','Khớp', R.ok, 'Đúng số lượng'],
+    ['shortAll','t-short','Thiếu', R.short + R.onlyA, `Nhận ít hơn (${R.onlyA} mã chưa nhận)`],
+    ['over','t-over','Thừa', R.over, 'Nhận nhiều hơn hóa đơn'],
+    ['onlyB','t-miss','Ngoài hóa đơn', R.onlyB, 'Có nhận nhưng HĐ không có'],
+  ];
+  $('#tiles').innerHTML = tiles.map(t => `<div class="tile ${t[1]} ${filter===t[0]?'sel':''}" data-f="${t[0]}"><div class="k">${t[2]}</div><div class="v">${t[3]}</div><div class="s">${t[4]}</div></div>`).join('');
+  document.querySelectorAll('.tile').forEach(el => el.onclick = () => { filter = filter === el.dataset.f ? 'diff' : el.dataset.f; showResult(); });
+  renderTable();
+}
+function currentRows(){
+  const R = lastResult; const q = norm($('#q').value);
+  let rows = R.rows.filter(r => filter === 'all' ? true : filter === 'diff' ? r.st !== 'ok' : filter === 'shortAll' ? (r.st==='short'||r.st==='onlyA') : r.st === filter);
+  if (q) rows = rows.filter(r => norm(r.code).includes(q) || norm(r.name).includes(q));
+  if (sortKey) rows = [...rows].sort((x,y)=> (x[sortKey] > y[sortKey] ? 1 : x[sortKey] < y[sortKey] ? -1 : 0) * sortDir);
+  return rows;
+}
+function renderTable(){
+  const rows = currentRows();
+  const titles = { all:'Tất cả mã hàng', diff:'Các mã chênh lệch', ok:'Các mã khớp', shortAll:'Các mã thiếu', over:'Các mã thừa', onlyB:'Các mã ngoài hóa đơn' };
+  $('#tblTitle').textContent = `${titles[filter]} (${rows.length})`;
+  $('#tbody').innerHTML = rows.length ? rows.map(r => `<tr>
+    <td class="n zero">${r.i}</td><td class="code">${esc(r.code)}</td>
+    <td class="name" title="${esc(r.name)}">${esc(r.name)}${r.src && state.B.length>1 ? `<div class="src">Nhận ở: ${esc(r.src)}</div>`:''}</td>
+    <td class="n">${fmt(r.a)}</td><td class="n">${fmt(r.b)}</td>
+    <td class="n d ${r.d<0?'neg':r.d>0?'pos':'zero'}">${r.d>0?'+':''}${fmt(r.d)}</td>
+    <td><span class="pill ${ST[r.st][1]}">${ST[r.st][0]}</span></td></tr>`).join('')
+    : `<tr><td colspan="7" class="empty">${filter==='diff' ? '🎉 Không có mã nào chênh lệch' : 'Không có dữ liệu'}</td></tr>`;
+}
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+/* ---------- Xuất Excel ---------- */
+function exportXlsx(){
+  if (!lastResult) return;
+  const head = ['STT','Mã hàng','Tên hàng','SL hóa đơn','SL thực nhận','Lệch','Trạng thái','Nhận ở file'];
+  const mk = rows => [head, ...rows.map((r,i)=>[i+1,r.code,r.name,r.a,r.b,r.d,ST[r.st][0],r.src])];
+  const wb = XLSX.utils.book_new();
+  const diff = lastResult.rows.filter(r=>r.st!=='ok');
+  const ws1 = XLSX.utils.aoa_to_sheet(mk(diff)); const ws2 = XLSX.utils.aoa_to_sheet(mk(lastResult.rows));
+  [ws1,ws2].forEach(ws => ws['!cols'] = [{wch:5},{wch:16},{wch:60},{wch:11},{wch:12},{wch:8},{wch:14},{wch:18}]);
+  XLSX.utils.book_append_sheet(wb, ws1, 'Chênh lệch'); XLSX.utils.book_append_sheet(wb, ws2, 'Tất cả');
+  const d = new Date(); const stamp = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}_${String(d.getHours()).padStart(2,'0')}${String(d.getMinutes()).padStart(2,'0')}`;
+  XLSX.writeFile(wb, `DoiSoat_${stamp}.xlsx`);
+  toast('Đã xuất file đối soát');
+}
+
+/* ---------- Cập nhật ---------- */
+function modal(html){ $('#modal').innerHTML = html; $('#mask').classList.add('show'); }
+$('#mask').onclick = e => { if (e.target.id === 'mask' || e.target.dataset.close !== undefined) $('#mask').classList.remove('show'); };
+const closeBtn = '<button class="btn btn-dark" data-close>Đóng</button>';
+async function checkUpdate(){
+  modal(`<div class="big">🔄</div><h3>Đang kiểm tra phiên bản mới…</h3><p>Phiên bản hiện tại: v${APP_VERSION}</p>`);
+  let j;
+  try { const r = await fetch('/api/update/check', { cache: 'no-store' }); j = await r.json(); }
+  catch { return modal(`<div class="big">⚠️</div><h3>Không kiểm tra được</h3><p>Vui lòng mở lại ứng dụng rồi thử lại.</p>${closeBtn}`); }
+  if (!j.ok) return modal(j.offline
+    ? `<div class="big">📡</div><h3>Không có kết nối mạng</h3><p>Ứng dụng vẫn dùng bình thường khi offline. Hãy kết nối Internet để kiểm tra cập nhật.</p>${closeBtn}`
+    : `<div class="big">⚠️</div><h3>Không kiểm tra được</h3><p>Máy chủ cập nhật chưa phản hồi (${esc(j.error||'')}). Vui lòng thử lại sau.</p>${closeBtn}`);
+  if (!j.newer) return modal(`<div class="big">✅</div><h3>Bạn đang dùng bản mới nhất</h3><p>v${APP_VERSION}</p>${closeBtn}`);
+  modal(`<div class="big">🎁</div><h3>Có phiên bản mới v${esc(j.latest)}</h3><p style="white-space:pre-line;text-align:left;max-height:180px;overflow:auto">${esc((j.notes||'').slice(0,600)) || 'Bản cập nhật mới từ Gia Khánh Motor.'}</p>
+    <button class="btn btn-main" id="btnInstall">Cập nhật ngay</button> <button class="btn btn-ghost" data-close>Để sau</button>`);
+  $('#btnInstall').onclick = installUpdate;
+}
+async function installUpdate(){
+  modal(`<div class="big">⬇️</div><h3>Đang tải và cài bản mới…</h3><p>Vui lòng không tắt ứng dụng.</p>`);
+  try {
+    const j = await (await fetch('/api/update/install', { method: 'POST' })).json();
+    if (!j.ok) throw new Error(j.error);
+    stopPing = true;
+    modal(`<div class="big">🎉</div><h3>Đã cập nhật lên v${esc(j.version)}</h3><p>Ứng dụng sẽ tự mở lại bản mới. Cửa sổ này sẽ đóng.</p>`);
+    setTimeout(() => window.close(), 2500);
+  } catch(e) { modal(`<div class="big">⚠️</div><h3>Cập nhật không thành công</h3><p>${esc(e.message||'Lỗi không xác định')}</p>${closeBtn}`); }
+}
+const cmpVer = (a,b) => { const x=a.split('.').map(Number), y=b.split('.').map(Number); for(let i=0;i<3;i++){ if((x[i]||0)!==(y[i]||0)) return (x[i]||0)-(y[i]||0);} return 0; };
+
+/* ---------- UI chung ---------- */
+function render(){
+  for (const side of ['A','B']){
+    $('#list'+side).innerHTML = state[side].map((f,i)=>`<li class="file"><div class="ic">XLS</div><div style="min-width:0">
+      <div class="nm" title="${esc(f.name)}">${esc(f.name)}</div>
+      <div class="mt ${f.error?'err':''}">${f.error ? esc(f.error) : `${f.rows.length} dòng · ${fmt(f.rows.reduce((s,r)=>s+r.qty,0))} SP · cột: ${esc(f.cols.code)} / ${esc(f.cols.qty)}`}</div></div>
+      <button class="x" data-side="${side}" data-i="${i}" title="Bỏ file này">×</button></li>`).join('');
+    const ok = state[side].filter(f=>!f.error);
+    const codes = new Set(ok.flatMap(f=>f.rows.map(r=>r.code)));
+    $('#sum'+side).innerHTML = ok.length > 1 ? `Cộng gộp <b>${ok.length}</b> file: <b>${codes.size}</b> mã · <b>${fmt(ok.reduce((s,f)=>s+f.rows.reduce((t,r)=>t+r.qty,0),0))}</b> sản phẩm` : '';
+  }
+  document.querySelectorAll('.file .x').forEach(b => b.onclick = () => { state[b.dataset.side].splice(+b.dataset.i,1); render(); });
+  $('#btnCompare').disabled = !(state.A.some(f=>!f.error) && state.B.some(f=>!f.error));
+}
+function toast(t){ const el = $('#toast'); el.textContent = t; el.style.display = 'block'; clearTimeout(el._t); el._t = setTimeout(()=> el.style.display='none', 2600); }
+
+document.querySelectorAll('.drop').forEach(d => {
+  d.onclick = () => { pickSide = d.dataset.side; $('#picker').click(); };
+  d.ondragover = e => { e.preventDefault(); d.classList.add('over'); };
+  d.ondragleave = () => d.classList.remove('over');
+  d.ondrop = e => { e.preventDefault(); d.classList.remove('over'); addFiles(d.dataset.side, e.dataTransfer.files); };
+});
+$('#picker').onchange = e => { addFiles(pickSide, e.target.files); e.target.value = ''; };
+$('#btnCompare').onclick = compare;
+$('#btnReset').onclick = () => { state.A = []; state.B = []; lastResult = null; $('#result').style.display='none'; $('#q').value=''; render(); };
+$('#btnExport').onclick = exportXlsx;
+$('#btnUpdate').onclick = checkUpdate;
+$('#q').oninput = () => lastResult && renderTable();
+document.querySelectorAll('thead th').forEach(th => th.onclick = () => { const k = th.dataset.k; sortDir = sortKey === k ? -sortDir : 1; sortKey = k; renderTable(); });
+$('#ver').textContent = 'v' + APP_VERSION;
+fetch('/api/version').then(r => r.json()).then(j => { APP_VERSION = j.version; $('#ver').textContent = 'v' + APP_VERSION; }).catch(()=>{});
+// báo cho ứng dụng biết cửa sổ còn mở (đóng cửa sổ thì ứng dụng tự thoát)
+const ping = () => { if (!stopPing) fetch('/api/ping').catch(()=>{}); };
+ping(); setInterval(ping, 5000);
+render();
+</script>
+</body>
+</html>
