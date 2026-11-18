@@ -51,8 +51,9 @@ func openWindow(url string) {
 	_ = exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
 }
 
-func restart(exe string) {
-	c := exec.Command(exe)
+// restart mở lại file .exe (đã được thay bằng bản mới) với các tham số cho trước.
+func restart(exe string, args ...string) error {
+	c := exec.Command(exe, args...)
 	c.Dir = filepath.Dir(exe)
-	_ = c.Start()
+	return c.Start()
 }

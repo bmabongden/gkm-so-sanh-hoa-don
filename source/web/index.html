@@ -129,7 +129,7 @@ footer b{color:#334155}
       <div class="drop" data-side="A">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>
         <div><b>Bấm để chọn file</b> hoặc kéo thả vào đây</div>
-        <div style="font-size:12px;margin-top:2px">Excel .xlsx, .xls, .csv</div>
+        <div style="font-size:12px;margin-top:2px">Excel .xlsx, .xls hoặc .csv</div>
       </div>
       <ul class="files" id="listA"></ul>
       <div class="sum-line" id="sumA"></div>
@@ -140,13 +140,13 @@ footer b{color:#334155}
       <div class="drop" data-side="B">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>
         <div><b>Bấm để chọn file</b> hoặc kéo thả vào đây</div>
-        <div style="font-size:12px;margin-top:2px">Excel .xlsx, .xls, .csv</div>
+        <div style="font-size:12px;margin-top:2px">Excel .xlsx, .xls hoặc .csv</div>
       </div>
       <ul class="files" id="listB"></ul>
       <div class="sum-line" id="sumB"></div>
     </div>
   </div>
-  <input type="file" id="picker" accept=".xlsx,.xls,.csv" multiple hidden>
+  <input type="file" id="picker" accept=".xlsx,.xlsm,.xlsb,.xls,.csv" multiple hidden>
 
   <div class="actions">
     <button class="btn btn-main" id="btnCompare" disabled>
@@ -188,24 +188,26 @@ footer b{color:#334155}
 
 <script src="xlsx.full.min.js"></script>
 <script>
-let APP_VERSION = '1.0.0';
+let APP_VERSION = '1.0.1';
 let stopPing = false;
 const $ = s => document.querySelector(s);
-const state = { A: [], B: [] };   // mỗi phần tử: {name, rows:[{code,name,qty}], cols, error}
-let lastResult = null, filter = 'diff', sortKey = null, sortDir = 1, pickSide = 'A';
+const state = { A: [], B: [] };   // mỗi phần tử: {name, size, mtime, rows:[{key,code,name,qty}], cols, skipped, note, error}
+let lastResult = null, filter = 'diff', autoFilter = true, sortKey = null, sortDir = 1, pickSide = 'A';
+const EXT = /\.(xlsx|xlsm|xlsb|xls|csv)$/i;
 
 /* ---------- Đọc file & nhận diện cột ---------- */
-const norm = s => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/đ/gi,'d').toLowerCase().replace(/\s+/g,' ').trim();
+// bỏ dấu tiếng Việt, về chữ thường, gộp khoảng trắng (để so tiêu đề cột và tìm kiếm)
+const norm = s => String(s ?? '').normalize('NFD').replace(/\p{M}/gu,'').replace(/[đĐ]/g,'d').toLowerCase().replace(/[\s\p{Cf}]+/gu,' ').trim();
 const COLS = {
   code: ['ma hang','ma hh','ma sp','ma vat tu','ma phu tung','ma san pham','part number','part no','sku','item code','code','ma'],
   name: ['ten hang','ten hh','ten sp','ten vat tu','ten phu tung','ten san pham','dien giai','description','item name','ten'],
   qty:  ['so luong','sl','qty','quantity','sl nhap','so luong nhap','sl thuc nhan']
 };
-function matchCol(h, keys){ const n = norm(h); return keys.findIndex(k => n === k) >= 0 ? 2 : (keys.some(k => k.length>3 && n.includes(k)) ? 1 : 0); }
+function matchCol(h, keys){ const n = norm(h); return keys.includes(n) ? 2 : (keys.some(k => k.length > 3 && n.includes(k)) ? 1 : 0); }
 function detect(rows){
-  // quét 20 dòng đầu, tìm dòng tiêu đề có nhiều cột khớp nhất
+  // quét 30 dòng đầu, tìm dòng tiêu đề có nhiều cột khớp nhất
   let best = null;
-  for (let r = 0; r < Math.min(20, rows.length); r++){
+  for (let r = 0; r < Math.min(30, rows.length); r++){
     const row = rows[r] || []; const pick = {}; let score = 0;
     for (const f of ['code','name','qty']){
       let bi = -1, bs = 0;
@@ -216,35 +218,86 @@ function detect(rows){
   }
   return best;
 }
-const cleanCode = c => String(c ?? '').replace(/\s+/g,'').toUpperCase();
-const toNum = v => { if (typeof v === 'number') return v; const s = String(v ?? '').replace(/\./g,'').replace(',', '.').trim(); const n = parseFloat(s); return isNaN(n) ? null : n; };
+// mã hiển thị: bỏ khoảng trắng, chữ hoa. Khóa so sánh: bỏ thêm gạch nối (12100-KYZ-710 = 12100KYZ710)
+const cleanCode = c => String(c ?? '').replace(/[\s\p{Cf}]/gu,'').toUpperCase();
+const codeKey = c => c.replace(/\p{Pd}/gu,'');
+const r6 = n => Math.round(n * 1e6) / 1e6;   // tránh sai số số lẻ (0.1 + 0.2)
+function toNum(v){
+  if (typeof v === 'number') return isFinite(v) ? v : null;
+  if (v == null || typeof v === 'boolean') return null;
+  const m = String(v).replace(/[\s\p{Cf}]/gu,'').match(/^[+-]?\d[\d.,]*/);   // "10 cái" -> 10
+  if (!m) return null;
+  let s = m[0].replace(/[.,]+$/,'');
+  const dots = (s.match(/\./g) || []).length, commas = (s.match(/,/g) || []).length;
+  if (dots && commas){                      // dấu đứng sau cùng là dấu thập phân
+    s = s.lastIndexOf(',') > s.lastIndexOf('.') ? s.replace(/\./g,'').replace(',','.') : s.replace(/,/g,'');
+  } else if (dots + commas > 1){            // 1.000.000
+    s = s.replace(/[.,]/g,'');
+  } else if (dots + commas === 1){
+    s = /^[+-]?\d{1,3}[.,]\d{3}$/.test(s) ? s.replace(/[.,]/,'') : s.replace(',','.');   // 1.000 = một nghìn; 2,5 = 2.5
+  }
+  const n = Number(s); return isFinite(n) ? n : null;
+}
+const isTotalLabel = raw => /^(tong|cong|total)( |:|$)/.test(norm(raw));   // dòng "Tổng cộng" (không nhầm với mã TONG123)
+
+async function readWorkbook(file){
+  const buf = new Uint8Array(await file.arrayBuffer());
+  const zip = buf[0] === 0x50 && buf[1] === 0x4B, ole = buf[0] === 0xD0 && buf[1] === 0xCF;
+  const utf16 = (buf[0] === 0xFF && buf[1] === 0xFE) || (buf[0] === 0xFE && buf[1] === 0xFF);
+  if (!zip && !ole && !utf16){
+    // file dạng chữ (CSV, hoặc .xls thực chất là bảng HTML/TSV): tự giải mã để không vỡ dấu tiếng Việt
+    let text;
+    try { text = new TextDecoder('utf-8', { fatal: true }).decode(buf); }
+    catch { text = new TextDecoder('windows-1258').decode(buf); }
+    if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+    return XLSX.read(text, { type: 'string', raw: true });   // raw: giữ nguyên chữ (mã có số 0 đầu, số "1.000")
+  }
+  return XLSX.read(buf, { type: 'array' });
+}
 
 async function readFile(file){
-  const buf = await file.arrayBuffer();
-  const wb = XLSX.read(buf, { type: 'array' });
+  const wb = await readWorkbook(file);
+  const base = { name: file.name, size: file.size, mtime: file.lastModified };
   for (const sn of wb.SheetNames){
-    const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], { header: 1, raw: true, defval: null });
+    const ws = wb.Sheets[sn]; if (!ws || !ws['!ref']) continue;
+    const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null, blankrows: true });
     const d = detect(rows);
     if (!d) continue;
-    const out = [];
+    const rng = XLSX.utils.decode_range(ws['!ref']);
+    const out = []; let skipped = 0;
     for (let i = d.r + 1; i < rows.length; i++){
-      const row = rows[i] || []; const code = cleanCode(row[d.pick.code]);
-      if (!code || /^(tong|cong|total)/i.test(norm(code))) continue;
-      const q = toNum(row[d.pick.qty]); if (q === null) continue;
-      out.push({ code, name: d.pick.name !== undefined ? String(row[d.pick.name] ?? '').trim() : '', qty: q });
+      const row = rows[i] || []; let rawCode = row[d.pick.code];
+      if (typeof rawCode === 'number'){
+        // mã lưu dạng số: lấy đúng chữ hiển thị trong Excel nếu toàn chữ số (giữ số 0 ở đầu)
+        const cell = ws[XLSX.utils.encode_cell({ r: rng.s.r + i, c: rng.s.c + d.pick.code })];
+        if (cell && typeof cell.w === 'string' && /^\d+$/.test(cell.w.trim())) rawCode = cell.w.trim();
+      }
+      const code = cleanCode(rawCode);
+      if (!code || isTotalLabel(rawCode)) continue;
+      const q = toNum(row[d.pick.qty]);
+      if (q === null){ if (norm(row[d.pick.qty]) !== norm(d.headers[d.pick.qty])) skipped++; continue; }   // dòng tiêu đề lặp lại thì không tính
+      out.push({ key: codeKey(code) || code, code, name: d.pick.name !== undefined ? String(row[d.pick.name] ?? '').trim() : '', qty: q });
     }
-    return { name: file.name, sheet: sn, rows: out,
-      cols: { code: d.headers[d.pick.code], name: d.headers[d.pick.name], qty: d.headers[d.pick.qty] } };
+    if (!out.length) return { ...base, rows: [], error: 'Không có dòng hàng nào có số lượng trong file' };
+    return { ...base, sheet: sn, rows: out, skipped,
+      note: wb.SheetNames.length > 1 ? `sheet "${sn}"` : '',
+      cols: { code: String(d.headers[d.pick.code]).trim(), qty: String(d.headers[d.pick.qty]).trim() } };
   }
-  return { name: file.name, rows: [], error: 'Không tìm thấy cột "Mã hàng" và "Số lượng"' };
+  return { ...base, rows: [], error: 'Không tìm thấy cột "Mã hàng" và "Số lượng"' };
 }
 
 async function addFiles(side, fileList){
-  const files = Array.from(fileList);
+  const files = Array.from(fileList || []), other = side === 'A' ? 'B' : 'A';
   for (const f of files){
-    if (!/\.(xlsx|xls|csv)$/i.test(f.name)) { toast('Bỏ qua ' + f.name + ': không phải file Excel'); continue; }
-    if (state[side].some(x => x.name === f.name)) { toast(f.name + ' đã có trong danh sách'); continue; }
-    try { state[side].push(await readFile(f)); } catch(e){ state[side].push({ name: f.name, rows: [], error: 'Không đọc được file' }); }
+    if (!EXT.test(f.name)) { toast('Bỏ qua "' + f.name + '": không phải file Excel/CSV'); continue; }
+    const idx = state[side].findIndex(x => x.name === f.name);
+    if (idx >= 0 && state[side][idx].size === f.size && state[side][idx].mtime === f.lastModified) { toast('"' + f.name + '" đã có trong danh sách'); continue; }
+    let item;
+    try { item = await readFile(f); }
+    catch(e){ item = { name: f.name, size: f.size, mtime: f.lastModified, rows: [], error: 'Không đọc được file (file hỏng, có mật khẩu hoặc đang bị khóa)' }; }
+    if (idx >= 0){ state[side][idx] = item; toast('Đã thay "' + f.name + '" bằng file vừa chọn (trùng tên)'); }
+    else state[side].push(item);
+    if (state[other].some(x => x.name === f.name && x.size === f.size && x.mtime === f.lastModified)) toast('Lưu ý: "' + f.name + '" đang nằm ở cả hai khung A và B');
   }
   render();
 }
@@ -253,39 +306,41 @@ async function addFiles(side, fileList){
 function aggregate(list){
   const m = new Map();
   for (const f of list) for (const r of f.rows){
-    const o = m.get(r.code) || { name: r.name, qty: 0, src: new Set() };
-    o.qty += r.qty; if (!o.name) o.name = r.name; o.src.add(f.name.replace(/\.(xlsx|xls|csv)$/i,''));
-    m.set(r.code, o);
+    const o = m.get(r.key) || { code: r.code, name: r.name, qty: 0, src: new Set() };
+    o.qty += r.qty; if (!o.name) o.name = r.name; o.src.add(f.name.replace(EXT,''));
+    m.set(r.key, o);
   }
+  for (const o of m.values()) o.qty = r6(o.qty);
   return m;
 }
-function compare(){
+function compare(keep){
   const A = aggregate(state.A), B = aggregate(state.B);
-  const codes = new Set([...A.keys(), ...B.keys()]); const rows = [];
-  for (const c of codes){
-    const a = A.get(c), b = B.get(c); const qa = a?.qty || 0, qb = b?.qty || 0, d = qb - qa;
-    let st = 'ok';
-    if (!a) st = 'onlyB'; else if (!b) st = 'onlyA'; else if (d < 0) st = 'short'; else if (d > 0) st = 'over';
-    rows.push({ code: c, name: a?.name || b?.name || '', a: qa, b: qb, d, st, src: b ? [...b.src].join(', ') : '' });
+  const keys = new Set([...A.keys(), ...B.keys()]); const rows = [];
+  for (const k of keys){
+    const a = A.get(k), b = B.get(k); const qa = a?.qty || 0, qb = b?.qty || 0, d = r6(qb - qa);
+    const st = d === 0 ? 'ok' : !b ? 'onlyA' : !a ? 'onlyB' : d < 0 ? 'short' : 'over';
+    rows.push({ code: a?.code || b.code, name: a?.name || b?.name || '', a: qa, b: qb, d, st, src: b ? [...b.src].join(', ') : '' });
   }
   rows.sort((x,y)=> x.code.localeCompare(y.code));
   rows.forEach((r,i)=> r.i = i+1);
   const cnt = k => rows.filter(r => r.st === k).length;
   lastResult = { rows, ok: cnt('ok'), short: cnt('short'), over: cnt('over'), onlyA: cnt('onlyA'), onlyB: cnt('onlyB'),
-    sumA: rows.reduce((s,r)=>s+r.a,0), sumB: rows.reduce((s,r)=>s+r.b,0) };
-  filter = lastResult.rows.length === lastResult.ok ? 'all' : 'diff';
+    sumA: r6(rows.reduce((s,r)=>s+r.a,0)), sumB: r6(rows.reduce((s,r)=>s+r.b,0)) };
+  // chưa tự chọn ô lọc nào thì mặc định xem phần chênh lệch (khớp hết thì xem tất cả)
+  if (keep !== true || autoFilter){ filter = lastResult.rows.length === lastResult.ok ? 'all' : 'diff'; autoFilter = true; }
   showResult();
 }
 
 const ST = { ok:['Khớp','p-ok'], short:['Thiếu','p-short'], over:['Thừa','p-over'], onlyA:['Chưa nhận','p-short'], onlyB:['Ngoài hóa đơn','p-miss'] };
-const fmt = n => Number(n).toLocaleString('vi-VN');
+const fmt = n => Number(n).toLocaleString('vi-VN', { maximumFractionDigits: 6 });
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
 function showResult(){
   const R = lastResult; $('#result').style.display = 'block';
-  const nDiff = R.rows.length - R.ok;
+  const nDiff = R.rows.length - R.ok, dSum = r6(R.sumB - R.sumA);
   $('#banner').className = 'banner ' + (nDiff ? 'bad' : 'ok');
   $('#banner').innerHTML = nDiff
-    ? `<div class="big">⚠️</div><div><h3>Có ${nDiff} mã hàng chênh lệch số lượng</h3><p>Tổng SL hóa đơn: <b>${fmt(R.sumA)}</b> · Tổng SL thực nhận: <b>${fmt(R.sumB)}</b> · Lệch: <b>${R.sumB-R.sumA>0?'+':''}${fmt(R.sumB-R.sumA)}</b></p></div>`
+    ? `<div class="big">⚠️</div><div><h3>Có ${nDiff} mã hàng chênh lệch số lượng</h3><p>Tổng SL hóa đơn: <b>${fmt(R.sumA)}</b> · Tổng SL thực nhận: <b>${fmt(R.sumB)}</b> · Lệch: <b>${dSum>0?'+':''}${fmt(dSum)}</b></p></div>`
     : `<div class="big">✅</div><div><h3>Khớp hoàn toàn! ${R.rows.length} mã hàng đúng số lượng</h3><p>Tổng SL hóa đơn: <b>${fmt(R.sumA)}</b> = Tổng SL thực nhận: <b>${fmt(R.sumB)}</b></p></div>`;
   const tiles = [
     ['all','t-all','Tất cả mã', R.rows.length, 'Hóa đơn + thực nhận'],
@@ -295,29 +350,30 @@ function showResult(){
     ['onlyB','t-miss','Ngoài hóa đơn', R.onlyB, 'Có nhận nhưng HĐ không có'],
   ];
   $('#tiles').innerHTML = tiles.map(t => `<div class="tile ${t[1]} ${filter===t[0]?'sel':''}" data-f="${t[0]}"><div class="k">${t[2]}</div><div class="v">${t[3]}</div><div class="s">${t[4]}</div></div>`).join('');
-  document.querySelectorAll('.tile').forEach(el => el.onclick = () => { filter = filter === el.dataset.f ? 'diff' : el.dataset.f; showResult(); });
+  document.querySelectorAll('.tile').forEach(el => el.onclick = () => { filter = filter === el.dataset.f ? 'diff' : el.dataset.f; autoFilter = false; showResult(); });
   renderTable();
 }
+function hideResult(){ lastResult = null; $('#result').style.display = 'none'; }
 function currentRows(){
-  const R = lastResult; const q = norm($('#q').value);
+  const R = lastResult; const q = norm($('#q').value), qk = codeKey(cleanCode($('#q').value));
   let rows = R.rows.filter(r => filter === 'all' ? true : filter === 'diff' ? r.st !== 'ok' : filter === 'shortAll' ? (r.st==='short'||r.st==='onlyA') : r.st === filter);
-  if (q) rows = rows.filter(r => norm(r.code).includes(q) || norm(r.name).includes(q));
-  if (sortKey) rows = [...rows].sort((x,y)=> (x[sortKey] > y[sortKey] ? 1 : x[sortKey] < y[sortKey] ? -1 : 0) * sortDir);
+  if (q) rows = rows.filter(r => norm(r.code).includes(q) || norm(r.name).includes(q) || (qk && codeKey(r.code).includes(qk)));
+  if (sortKey) rows = [...rows].sort((x,y)=> (typeof x[sortKey] === 'number' ? x[sortKey] - y[sortKey] : String(x[sortKey]).localeCompare(String(y[sortKey]), 'vi')) * sortDir);
   return rows;
 }
 function renderTable(){
   const rows = currentRows();
   const titles = { all:'Tất cả mã hàng', diff:'Các mã chênh lệch', ok:'Các mã khớp', shortAll:'Các mã thiếu', over:'Các mã thừa', onlyB:'Các mã ngoài hóa đơn' };
   $('#tblTitle').textContent = `${titles[filter]} (${rows.length})`;
+  document.querySelectorAll('thead th').forEach(th => { th.textContent = th.dataset.t + (sortKey === th.dataset.k ? (sortDir > 0 ? ' ▲' : ' ▼') : ''); });
   $('#tbody').innerHTML = rows.length ? rows.map(r => `<tr>
     <td class="n zero">${r.i}</td><td class="code">${esc(r.code)}</td>
     <td class="name" title="${esc(r.name)}">${esc(r.name)}${r.src && state.B.length>1 ? `<div class="src">Nhận ở: ${esc(r.src)}</div>`:''}</td>
     <td class="n">${fmt(r.a)}</td><td class="n">${fmt(r.b)}</td>
     <td class="n d ${r.d<0?'neg':r.d>0?'pos':'zero'}">${r.d>0?'+':''}${fmt(r.d)}</td>
     <td><span class="pill ${ST[r.st][1]}">${ST[r.st][0]}</span></td></tr>`).join('')
-    : `<tr><td colspan="7" class="empty">${filter==='diff' ? '🎉 Không có mã nào chênh lệch' : 'Không có dữ liệu'}</td></tr>`;
+    : `<tr><td colspan="7" class="empty">${$('#q').value.trim() ? 'Không tìm thấy mã hoặc tên hàng phù hợp' : filter==='diff' ? '🎉 Không có mã nào chênh lệch' : 'Không có dữ liệu'}</td></tr>`;
 }
-const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
 /* ---------- Xuất Excel ---------- */
 function exportXlsx(){
@@ -329,74 +385,95 @@ function exportXlsx(){
   const ws1 = XLSX.utils.aoa_to_sheet(mk(diff)); const ws2 = XLSX.utils.aoa_to_sheet(mk(lastResult.rows));
   [ws1,ws2].forEach(ws => ws['!cols'] = [{wch:5},{wch:16},{wch:60},{wch:11},{wch:12},{wch:8},{wch:14},{wch:18}]);
   XLSX.utils.book_append_sheet(wb, ws1, 'Chênh lệch'); XLSX.utils.book_append_sheet(wb, ws2, 'Tất cả');
-  const d = new Date(); const stamp = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}_${String(d.getHours()).padStart(2,'0')}${String(d.getMinutes()).padStart(2,'0')}`;
-  XLSX.writeFile(wb, `DoiSoat_${stamp}.xlsx`);
-  toast('Đã xuất file đối soát');
+  const d = new Date(), p2 = n => String(n).padStart(2,'0');
+  const name = `DoiSoat_${d.getFullYear()}${p2(d.getMonth()+1)}${p2(d.getDate())}_${p2(d.getHours())}${p2(d.getMinutes())}${p2(d.getSeconds())}.xlsx`;
+  try { XLSX.writeFile(wb, name); toast('Đã lưu ' + name + ' vào thư mục Tải xuống (Downloads)'); }
+  catch(e){ toast('Không xuất được file Excel'); }
 }
 
 /* ---------- Cập nhật ---------- */
 function modal(html){ $('#modal').innerHTML = html; $('#mask').classList.add('show'); }
-$('#mask').onclick = e => { if (e.target.id === 'mask' || e.target.dataset.close !== undefined) $('#mask').classList.remove('show'); };
+let modalLocked = false;
+$('#mask').onclick = e => { if (!modalLocked && (e.target.id === 'mask' || e.target.dataset.close !== undefined)) $('#mask').classList.remove('show'); };
 const closeBtn = '<button class="btn btn-dark" data-close>Đóng</button>';
 async function checkUpdate(){
+  if (modalLocked) return;
   modal(`<div class="big">🔄</div><h3>Đang kiểm tra phiên bản mới…</h3><p>Phiên bản hiện tại: v${APP_VERSION}</p>`);
   let j;
-  try { const r = await fetch('/api/update/check', { cache: 'no-store' }); j = await r.json(); }
-  catch { return modal(`<div class="big">⚠️</div><h3>Không kiểm tra được</h3><p>Vui lòng mở lại ứng dụng rồi thử lại.</p>${closeBtn}`); }
+  try { const r = await fetch('/api/update/check', { cache: 'no-store' }); if (!r.ok) throw 0; j = await r.json(); }
+  catch { return modal(`<div class="big">⚠️</div><h3>Không kiểm tra được</h3><p>Vui lòng đóng rồi mở lại ứng dụng và thử lại.</p>${closeBtn}`); }
   if (!j.ok) return modal(j.offline
     ? `<div class="big">📡</div><h3>Không có kết nối mạng</h3><p>Ứng dụng vẫn dùng bình thường khi offline. Hãy kết nối Internet để kiểm tra cập nhật.</p>${closeBtn}`
     : `<div class="big">⚠️</div><h3>Không kiểm tra được</h3><p>Máy chủ cập nhật chưa phản hồi (${esc(j.error||'')}). Vui lòng thử lại sau.</p>${closeBtn}`);
-  if (!j.newer) return modal(`<div class="big">✅</div><h3>Bạn đang dùng bản mới nhất</h3><p>v${APP_VERSION}</p>${closeBtn}`);
+  if (!j.newer) return modal(`<div class="big">✅</div><h3>Bạn đang dùng bản mới nhất</h3><p>v${esc(j.current || APP_VERSION)}</p>${closeBtn}`);
   modal(`<div class="big">🎁</div><h3>Có phiên bản mới v${esc(j.latest)}</h3><p style="white-space:pre-line;text-align:left;max-height:180px;overflow:auto">${esc((j.notes||'').slice(0,600)) || 'Bản cập nhật mới từ Gia Khánh Motor.'}</p>
     <button class="btn btn-main" id="btnInstall">Cập nhật ngay</button> <button class="btn btn-ghost" data-close>Để sau</button>`);
   $('#btnInstall').onclick = installUpdate;
 }
 async function installUpdate(){
+  modalLocked = true;
   modal(`<div class="big">⬇️</div><h3>Đang tải và cài bản mới…</h3><p>Vui lòng không tắt ứng dụng.</p>`);
   try {
-    const j = await (await fetch('/api/update/install', { method: 'POST' })).json();
+    const r = await fetch('/api/update/install', { method: 'POST', headers: { 'X-GKM': '1' } });
+    if (!r.ok) throw new Error('Ứng dụng không phản hồi, hãy đóng rồi mở lại');
+    const j = await r.json();
     if (!j.ok) throw new Error(j.error);
     stopPing = true;
-    modal(`<div class="big">🎉</div><h3>Đã cập nhật lên v${esc(j.version)}</h3><p>Ứng dụng sẽ tự mở lại bản mới. Cửa sổ này sẽ đóng.</p>`);
-    setTimeout(() => window.close(), 2500);
-  } catch(e) { modal(`<div class="big">⚠️</div><h3>Cập nhật không thành công</h3><p>${esc(e.message||'Lỗi không xác định')}</p>${closeBtn}`); }
+    modal(`<div class="big">🎉</div><h3>Đã cập nhật lên v${esc(j.version)}</h3><p>Ứng dụng đang mở lại bản mới, vui lòng chờ vài giây…</p>`);
+    // chờ bản mới chạy lên (cùng địa chỉ) rồi tải lại trang
+    const old = APP_VERSION;
+    for (let i = 0; i < 60; i++){
+      await new Promise(res => setTimeout(res, 700));
+      try { const v = await (await fetch('/api/version', { cache: 'no-store' })).json(); if (v.version && v.version !== old){ location.reload(); return; } } catch {}
+    }
+    modalLocked = false;
+    modal(`<div class="big">✅</div><h3>Đã cài bản mới</h3><p>Hãy đóng cửa sổ này rồi mở lại ứng dụng để dùng bản v${esc(j.version)}.</p>${closeBtn}`);
+  } catch(e) { modalLocked = false; modal(`<div class="big">⚠️</div><h3>Cập nhật không thành công</h3><p>${esc(e.message||'Lỗi không xác định')}</p>${closeBtn}`); }
 }
-const cmpVer = (a,b) => { const x=a.split('.').map(Number), y=b.split('.').map(Number); for(let i=0;i<3;i++){ if((x[i]||0)!==(y[i]||0)) return (x[i]||0)-(y[i]||0);} return 0; };
 
 /* ---------- UI chung ---------- */
 function render(){
   for (const side of ['A','B']){
     $('#list'+side).innerHTML = state[side].map((f,i)=>`<li class="file"><div class="ic">XLS</div><div style="min-width:0">
       <div class="nm" title="${esc(f.name)}">${esc(f.name)}</div>
-      <div class="mt ${f.error?'err':''}">${f.error ? esc(f.error) : `${f.rows.length} dòng · ${fmt(f.rows.reduce((s,r)=>s+r.qty,0))} SP · cột: ${esc(f.cols.code)} / ${esc(f.cols.qty)}`}</div></div>
+      <div class="mt ${f.error?'err':''}">${f.error ? esc(f.error) : `${f.rows.length} dòng · ${fmt(r6(f.rows.reduce((s,r)=>s+r.qty,0)))} SP · cột: ${esc(f.cols.code)} / ${esc(f.cols.qty)}${f.note ? ' · ' + esc(f.note) : ''}${f.skipped ? ` · <span class="err">bỏ qua ${f.skipped} dòng thiếu số lượng</span>` : ''}`}</div></div>
       <button class="x" data-side="${side}" data-i="${i}" title="Bỏ file này">×</button></li>`).join('');
     const ok = state[side].filter(f=>!f.error);
-    const codes = new Set(ok.flatMap(f=>f.rows.map(r=>r.code)));
-    $('#sum'+side).innerHTML = ok.length > 1 ? `Cộng gộp <b>${ok.length}</b> file: <b>${codes.size}</b> mã · <b>${fmt(ok.reduce((s,f)=>s+f.rows.reduce((t,r)=>t+r.qty,0),0))}</b> sản phẩm` : '';
+    const keys = new Set(ok.flatMap(f=>f.rows.map(r=>r.key)));
+    $('#sum'+side).innerHTML = ok.length > 1 ? `Cộng gộp <b>${ok.length}</b> file: <b>${keys.size}</b> mã · <b>${fmt(r6(ok.reduce((s,f)=>s+f.rows.reduce((t,r)=>t+r.qty,0),0)))}</b> sản phẩm` : '';
   }
   document.querySelectorAll('.file .x').forEach(b => b.onclick = () => { state[b.dataset.side].splice(+b.dataset.i,1); render(); });
-  $('#btnCompare').disabled = !(state.A.some(f=>!f.error) && state.B.some(f=>!f.error));
+  const can = state.A.some(f=>!f.error) && state.B.some(f=>!f.error);
+  $('#btnCompare').disabled = !can;
+  // danh sách file đổi sau khi đã so sánh: tính lại ngay để bảng kết quả không bị cũ
+  if (lastResult){ if (can) compare(true); else hideResult(); }
 }
-function toast(t){ const el = $('#toast'); el.textContent = t; el.style.display = 'block'; clearTimeout(el._t); el._t = setTimeout(()=> el.style.display='none', 2600); }
+function toast(t){ const el = $('#toast'); el.textContent = t; el.style.display = 'block'; clearTimeout(el._t); el._t = setTimeout(()=> el.style.display='none', 3500); }
 
 document.querySelectorAll('.drop').forEach(d => {
   d.onclick = () => { pickSide = d.dataset.side; $('#picker').click(); };
   d.ondragover = e => { e.preventDefault(); d.classList.add('over'); };
   d.ondragleave = () => d.classList.remove('over');
-  d.ondrop = e => { e.preventDefault(); d.classList.remove('over'); addFiles(d.dataset.side, e.dataTransfer.files); };
+  d.ondrop = e => { e.preventDefault(); e.stopPropagation(); d.classList.remove('over'); addFiles(d.dataset.side, e.dataTransfer.files); };
 });
+// thả file ra ngoài hai khung: không để trình duyệt mở file đó thay cho ứng dụng
+addEventListener('dragover', e => e.preventDefault());
+addEventListener('drop', e => { e.preventDefault(); toast('Hãy thả file vào khung A hoặc khung B'); });
 $('#picker').onchange = e => { addFiles(pickSide, e.target.files); e.target.value = ''; };
-$('#btnCompare').onclick = compare;
-$('#btnReset').onclick = () => { state.A = []; state.B = []; lastResult = null; $('#result').style.display='none'; $('#q').value=''; render(); };
+$('#btnCompare').onclick = () => compare();
+$('#btnReset').onclick = () => { state.A = []; state.B = []; hideResult(); $('#q').value=''; sortKey = null; sortDir = 1; render(); };
 $('#btnExport').onclick = exportXlsx;
 $('#btnUpdate').onclick = checkUpdate;
 $('#q').oninput = () => lastResult && renderTable();
-document.querySelectorAll('thead th').forEach(th => th.onclick = () => { const k = th.dataset.k; sortDir = sortKey === k ? -sortDir : 1; sortKey = k; renderTable(); });
+document.querySelectorAll('thead th').forEach(th => { th.dataset.t = th.textContent; th.onclick = () => { const k = th.dataset.k; sortDir = sortKey === k ? -sortDir : 1; sortKey = k; if (lastResult) renderTable(); }; });
 $('#ver').textContent = 'v' + APP_VERSION;
-fetch('/api/version').then(r => r.json()).then(j => { APP_VERSION = j.version; $('#ver').textContent = 'v' + APP_VERSION; }).catch(()=>{});
-// báo cho ứng dụng biết cửa sổ còn mở (đóng cửa sổ thì ứng dụng tự thoát)
-const ping = () => { if (!stopPing) fetch('/api/ping').catch(()=>{}); };
-ping(); setInterval(ping, 5000);
+
+// báo cho ứng dụng biết cửa sổ còn mở; đóng cửa sổ thì ứng dụng tự thoát
+const ping = () => { if (stopPing) return; fetch('/api/ping', { cache: 'no-store' }).then(r => r.json()).then(j => { if (j.version){ APP_VERSION = j.version; $('#ver').textContent = 'v' + APP_VERSION; } }).catch(()=>{}); };
+ping(); setInterval(ping, 3000);
+addEventListener('pagehide', () => { try { navigator.sendBeacon('/api/closing', ''); } catch(e){} });
+// giữ một khóa để trình duyệt không cho cửa sổ "ngủ" khi thu nhỏ lâu
+try { navigator.locks && navigator.locks.request('gkm-so-sanh-hoa-don', () => new Promise(() => {})); } catch(e){}
 render();
 </script>
 </body>

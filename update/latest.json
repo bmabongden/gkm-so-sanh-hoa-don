@@ -1,7 +1,7 @@
 {
-  "version": "1.0.0",
-  "notes": "Bản đầu tiên",
+  "version": "1.0.1",
+  "notes": "Sửa lỗi so sánh: không còn bỏ sót mã bắt đầu bằng TONG/CONG, không báo lệch giả với số lẻ, mã có gạch nối vẫn khớp, đọc được file CSV tiếng Việt. Ứng dụng không còn tự tắt ngầm khi thu nhỏ cửa sổ.",
   "url": "https://github.com/bmabongden/gkm-so-sanh-hoa-don/raw/main/app/GKM_SoSanhHoaDon.exe",
-  "sha256": "52b6b88895d72f9f4ee882584ccfed35f2b1245c2dd17836836619ef5b266d10",
-  "size": 7644672
+  "sha256": "9b7b940fd6536f89ed8a9c3eb003b95cf2d5738ceb990ab7584a837182e97899",
+  "size": 7715328
 }
